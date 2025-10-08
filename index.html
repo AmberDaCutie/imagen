@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Imagen Image Generator</title>
   <style>
+    /* ... (CSS remains the same or slightly adjusted for Google Blue in previous response) ... */
     body {
       font-family: Arial, sans-serif;
       text-align: center;
@@ -27,7 +28,7 @@
       padding: 10px 15px;
       font-size: 16px;
       color: white;
-      background-color: #4285F4; /* Google Blue */
+      background-color: #4285F4;
       border: none;
       border-radius: 5px;
       cursor: pointer;
@@ -62,20 +63,22 @@
   <textarea id="prompt" rows="4" placeholder="Enter your prompt here..."></textarea>
   <br>
 
-  <button id="generateButton">Generate Image (via Server)</button>
+  <button id="generateButton">Generate Image</button>
 
   <div id="status"></div>
   <div id="imageResult"></div>
 
   <script>
-    // JavaScript for handling API requests and image display
+    // --- Configuration for your custom Imagen Endpoint ---
+    const IMAGEN_API_ENDPOINT = 'https://free-gemini.vercel.app/api/google/v1beta/models/'; 
+    const IMAGEN_MODEL = 'imagen-4.0-generate-preview-06-06'; // Or whatever model your endpoint uses
+
     document.getElementById('generateButton').addEventListener('click', async () => {
       const prompt = document.getElementById('prompt').value.trim();
       const generateButton = document.getElementById('generateButton');
       const status = document.getElementById('status');
       const imageResult = document.getElementById('imageResult');
 
-      // Clear previous status and image output
       status.innerHTML = '';
       imageResult.innerHTML = '';
 
@@ -84,54 +87,64 @@
         return;
       }
 
-      // Disable button and show loading message
       generateButton.disabled = true;
       status.innerHTML = '<p class="loader">Generating image with Imagen... Please wait!</p>';
 
       try {
-        // CALL A NEW SERVER-SIDE ENDPOINT
-        const response = await fetch('https://free-gemini.vercel.app/api/google/v1beta/models/imagen-4.0-generate-preview-06-06:predict', { // <-- New Endpoint
+        // --- UPDATED FETCH CALL ---
+        const response = await fetch(IMAGEN_API_ENDPOINT, { 
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
           },
           body: JSON.stringify({
-            "prompt": prompt      // User-provided prompt
+            // --- UPDATED JSON BODY FOR IMAGEN ENDPOINT ---
+            model: IMAGEN_MODEL, 
+            prompt: prompt,
+            // You may need to add other required parameters here like:
+            // aspectRatio: '1:1',
+            // numberOfImages: 1
           }),
         });
 
-        // Handle the API response from your server
         if (!response.ok) {
-            const errorData = await response.json();
-          throw new Error(`Server Error: ${response.status}, ${errorData.error || response.statusText}`);
+            // Try to read error message from body if available
+            const errorData = await response.json().catch(() => ({})); 
+          throw new Error(`Error: ${response.status}, ${errorData.error || response.statusText}`);
         }
 
         const data = await response.json();
-        // The server should return the image data as a base64 string
-        const base64Image = data.base64Image; 
+        
+        // --- UPDATED IMAGE URL EXTRACTION (Assuming your endpoint returns a base64 string) ---
+        // Since Imagen APIs usually return base64, we'll look for that:
+        const base64Image = data.base64Image || (data.data && data.data[0].imageBytes); 
 
-        if (!base64Image) {
-            throw new Error('Image data not received from server.');
+        if (base64Image) {
+            const imageUrl = `data:image/jpeg;base64,${base64Image}`;
+            imageResult.innerHTML = `
+              <img src="${imageUrl}" alt="Generated Image">
+              <p><a href="${imageUrl}" download="imagen_image.jpeg">Download Image</a></p>
+            `;
+        } else if (data.url || (data.data && data.data[0].url)) {
+            // Fallback: If your endpoint returns a direct URL (like DALL-E did)
+            const imageUrl = data.url || data.data[0].url;
+            imageResult.innerHTML = `
+              <img src="${imageUrl}" alt="Generated Image">
+              <p><a href="${imageUrl}" download="imagen_image.jpeg">Download Image</a></p>
+            `;
+        } else {
+            throw new Error('Image data not found in the response.');
         }
-
-        // Display the generated image using a data URL
-        const imageUrl = `data:image/jpeg;base64,${base64Image}`;
-        imageResult.innerHTML = `
-          <img src="${imageUrl}" alt="Generated Image">
-          <p><a href="${imageUrl}" download="imagen_image.jpeg">Download Image</a></p>
-        `;
 
         status.innerHTML = '';
       } catch (error) {
-        // Log and show errors gracefully
         console.error(error);
         status.innerHTML = `<p style="color: red;">Failed to generate an image. ${error.message}</p>`;
       } finally {
-        // Re-enable the button
         generateButton.disabled = false;
       }
     });
   </script>
 </body>
 </html>
-
